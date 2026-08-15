@@ -15,6 +15,9 @@ dist-ssr
 # Claude 로컬 작업 영역 (PRD 등 — 규약상 로컬 영속)
 .claude/
 
+# MediaPipe wasm 런타임 — 빌드 시 node_modules에서 복사한다 (vite.config.ts)
+public/wasm/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
