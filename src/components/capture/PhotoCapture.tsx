@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { preloadLandmarker } from '../../core/adapters/faceLandmarkerAdapter'
 
 export interface CapturedPhoto {
   /** 얼굴 검출에 넘길 원본 소스 */
@@ -55,6 +56,11 @@ export function PhotoCapture({ onCapture }: PhotoCaptureProps) {
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
+  }, [])
+
+  // 사용자가 얼굴 위치를 맞추는 동안 모델(약 15MB)을 미리 받아 둔다
+  useEffect(() => {
+    preloadLandmarker()
   }, [])
 
   useEffect(() => {

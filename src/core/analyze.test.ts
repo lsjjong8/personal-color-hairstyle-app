@@ -17,10 +17,10 @@ function solidImage(width: number, height: number, color: Rgb): ImageLike {
 }
 
 const face: FaceLandmarkSet = {
+  // 어댑터가 실제로 반환하는 형태와 같은 양 볼 2점
   skinPoints: [
     { x: 40, y: 60 },
     { x: 80, y: 60 },
-    { x: 60, y: 30 },
   ],
   metrics: {
     faceLength: 142,
