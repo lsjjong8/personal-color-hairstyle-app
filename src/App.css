@@ -115,6 +115,62 @@ p {
   gap: 0.75rem;
 }
 
+.section-title {
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+
+.swatch-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+.swatch-color {
+  display: block;
+  height: 3.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-line);
+}
+
+.tips {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.ghost {
+  appearance: none;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+}
+
+.evidence-box summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
 .tone {
   font-size: 2rem;
   font-weight: 700;
