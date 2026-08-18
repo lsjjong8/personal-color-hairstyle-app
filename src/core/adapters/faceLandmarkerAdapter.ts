@@ -11,8 +11,12 @@ import type { FaceMetrics, Point } from '../types'
 
 /** 얼굴 특징점 468개 중 이 앱이 쓰는 지점만 추린 결과 */
 export interface FaceLandmarkSet {
-  /** 피부색을 뽑을 지점 (양 볼) — 픽셀 좌표 */
+  /** 피부색을 뽑을 지점 (양 볼 여러 곳) — 픽셀 좌표 */
   skinPoints: Point[]
+  /** 조명 색 보정의 무채색 기준을 찾을 영역들 (왼눈·오른눈 각각) — 픽셀 좌표 */
+  neutralRegions: Point[][]
+  /** 표본 반경(픽셀). 얼굴 크기에 비례한다 — 고정값이면 얼굴이 작을 때 표본이 몇 픽셀뿐이다 */
+  sampleRadius: number
   /** 얼굴형 판정용 비율 측정값 — 픽셀 단위 */
   metrics: FaceMetrics
 }
@@ -21,8 +25,6 @@ export interface FaceLandmarkSet {
 const LANDMARK_INDEX = {
   leftCheek: 234,
   rightCheek: 454,
-  leftCheekInner: 50,
-  rightCheekInner: 280,
   forehead: 10,
   chin: 152,
   leftJaw: 172,
@@ -30,6 +32,27 @@ const LANDMARK_INDEX = {
   leftForehead: 21,
   rightForehead: 251,
 } as const
+
+/**
+ * 피부색 표본 지점 — 볼을 안쪽·가운데·아래쪽으로 넓게 훑는다.
+ * 지점이 적으면 한 곳의 그림자·잡티가 판정을 통째로 바꾼다
+ * (2026-08-18 실측: 같은 사진에서 표본 지점만 바꿔 네 계절이 모두 나왔다).
+ * 이마는 앞머리 오염 때문에 제외한다(ADR-004).
+ */
+const SKIN_SAMPLE_INDEXES = [50, 280, 205, 425, 116, 345, 118, 347] as const
+
+/**
+ * 눈 영역 — 이 안의 가장 밝은 픽셀이 흰자이며 조명 보정의 기준이 된다.
+ * **좌우를 따로 둔다.** 하나로 묶으면 두 눈 사이 콧대가 영역에 들어와
+ * 흰자 대신 피부를 기준으로 잡는다(whiteBalance.ts 주석 참조).
+ */
+const LEFT_EYE_INDEXES = [33, 133, 159, 145] as const
+const RIGHT_EYE_INDEXES = [263, 362, 386, 374] as const
+
+/** 표본 반경을 얼굴 너비의 이 비율로 잡는다 — 8지점과 곱해 충분한 픽셀이 모이는 값 */
+const SAMPLE_RADIUS_RATIO = 0.04
+/** 얼굴이 작게 잡혀도 최소 이만큼은 훑는다 */
+const MIN_SAMPLE_RADIUS = 4
 
 const MODEL_PATH = 'models/face_landmarker.task'
 const WASM_PATH = 'wasm'
@@ -103,14 +126,15 @@ export async function detectFace(
     y: landmarks[index].y * height,
   })
 
+  const cheekboneWidth = distance(at(LANDMARK_INDEX.leftCheek), at(LANDMARK_INDEX.rightCheek))
+
   return {
-    // 이마 지점은 피부 표본에서 뺀다 — 앞머리가 있으면 표본의 1/3이 머리카락이
-    // 되는데 절사 평균(20%)으로는 걷어낼 수 없다. 이마 인덱스는 얼굴 길이
-    // 측정에만 쓴다.
-    skinPoints: [at(LANDMARK_INDEX.leftCheekInner), at(LANDMARK_INDEX.rightCheekInner)],
+    skinPoints: SKIN_SAMPLE_INDEXES.map(at),
+    neutralRegions: [LEFT_EYE_INDEXES.map(at), RIGHT_EYE_INDEXES.map(at)],
+    sampleRadius: Math.max(MIN_SAMPLE_RADIUS, Math.round(cheekboneWidth * SAMPLE_RADIUS_RATIO)),
     metrics: {
       faceLength: distance(at(LANDMARK_INDEX.forehead), at(LANDMARK_INDEX.chin)),
-      cheekboneWidth: distance(at(LANDMARK_INDEX.leftCheek), at(LANDMARK_INDEX.rightCheek)),
+      cheekboneWidth,
       jawWidth: distance(at(LANDMARK_INDEX.leftJaw), at(LANDMARK_INDEX.rightJaw)),
       foreheadWidth: distance(
         at(LANDMARK_INDEX.leftForehead),

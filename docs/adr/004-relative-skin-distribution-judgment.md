@@ -5,6 +5,7 @@
 - 선행 결정: [002 웹 스택](002-web-stack-vite-react-mediapipe.md)
 - 관련 지식: [context.md](../context.md) §1 12타입 분류, §2 CIELAB·ITA와 그 한계
 - 구현: `src/core/rules/personalColor.ts`, `src/core/adapters/faceLandmarkerAdapter.ts`
+- 후속 결정: [006 조명 색 보정](006-white-balance-by-eye-sclera.md) — 본 ADR이 명도·채도만 상대화하고 **언더톤(h°)은 절대 임계값으로 남겨 둔** 빈틈을 메운다. 표본 지점도 볼 2곳에서 8곳으로 늘렸다(아래 서술은 결정 당시 기준)
 
 ## 맥락
 

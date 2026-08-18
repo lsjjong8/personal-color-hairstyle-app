@@ -1,4 +1,5 @@
 import { detectFace, type FaceLandmarkSet } from './adapters/faceLandmarkerAdapter'
+import { applyWhiteBalance, estimateNeutralReference } from './color/whiteBalance'
 import { judgeFaceShape } from './rules/faceShape'
 import { judgePersonalColor } from './rules/personalColor'
 import { sampleSkinLab } from './sampling/skinSampling'
@@ -13,15 +14,16 @@ import type { AnalysisResult, ImageLike } from './types'
  */
 
 /**
- * 피부색을 모을 때 각 지점 주변에서 훑는 반경(픽셀).
- * 표본 지점이 3(볼 2 + 이마)에서 2(볼만)로 줄면서 반경을 6→8로 올려
- * 픽셀 수를 보전했다 (3×13² = 507 ≈ 2×17² = 578).
+ * 얼굴 좌표가 이미 있을 때의 판정 — 외부 의존이 없다.
+ *
+ * 피부색을 재기 전에 조명 색을 걷어낸다. 눈 흰자를 무채색 기준으로 삼으며,
+ * 기준을 찾지 못하면(눈 감음·안경 반사·과노출) 보정 없이 원본으로 진행한다 —
+ * 보정 실패가 분석 실패가 되지는 않는다.
  */
-const SKIN_SAMPLE_RADIUS = 8
-
-/** 얼굴 좌표가 이미 있을 때의 판정 — 외부 의존이 없다 */
 export function analyzeFromFace(image: ImageLike, face: FaceLandmarkSet): AnalysisResult {
-  const skinLab = sampleSkinLab(image, face.skinPoints, SKIN_SAMPLE_RADIUS)
+  const reference = estimateNeutralReference(image, face.neutralRegions)
+  const balanced = reference === null ? image : applyWhiteBalance(image, reference)
+  const skinLab = sampleSkinLab(balanced, face.skinPoints, face.sampleRadius)
 
   if (skinLab === null) {
     return { ok: false, reason: 'too-few-skin-pixels' }

@@ -17,11 +17,19 @@ function solidImage(width: number, height: number, color: Rgb): ImageLike {
 }
 
 const face: FaceLandmarkSet = {
-  // 어댑터가 실제로 반환하는 형태와 같은 양 볼 2점
+  // 어댑터가 실제로 반환하는 형태 — 볼 여러 점
   skinPoints: [
     { x: 40, y: 60 },
     { x: 80, y: 60 },
+    { x: 45, y: 70 },
+    { x: 75, y: 70 },
   ],
+  // 눈 영역(좌·우): 단색 피부색뿐이라 채도 상한에 걸려 보정이 건너뛰어진다
+  neutralRegions: [
+    [{ x: 45, y: 45 }, { x: 55, y: 50 }],
+    [{ x: 65, y: 45 }, { x: 75, y: 50 }],
+  ],
+  sampleRadius: 6,
   metrics: {
     faceLength: 142,
     cheekboneWidth: 100,
