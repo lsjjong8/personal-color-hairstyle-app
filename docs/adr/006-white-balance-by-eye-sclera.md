@@ -5,6 +5,7 @@
 - 선행 결정: [004 분포 기준 상대 판정](004-relative-skin-distribution-judgment.md)
 - 관련 지식: [context.md](../context.md) §2 CIELAB·조명 편차
 - 구현: `src/core/color/whiteBalance.ts`
+- 후속 결정: [007 기준선 재보정](007-recalibrate-thresholds-on-real-photos.md) — 본 보정이 h°를 계통적으로 올리고 채도를 낮추는데, 판정 경계가 보정 전 기준 그대로여서 생긴 어긋남을 바로잡는다
 
 ## 맥락
 
