@@ -12,6 +12,8 @@ export interface CapturedPhoto {
 
 interface PhotoCaptureProps {
   onCapture: (photo: CapturedPhoto) => void
+  /** 앞 화면으로 돌아간다 — 폰 뒤로가기가 없는 환경을 위한 눈에 보이는 통로 */
+  onBack: () => void
 }
 
 /** 분석에 충분한 해상도. 너무 크면 느리고, 너무 작으면 피부 표본이 부족해진다 */
@@ -47,7 +49,7 @@ function drawToCanvas(
  * iOS Safari처럼 카메라 제약이 있는 환경에서도 업로드로 끝까지 갈 수 있도록
  * 폴백을 숨기지 않고 항상 노출한다(PRD 기술 리스크 완화책).
  */
-export function PhotoCapture({ onCapture }: PhotoCaptureProps) {
+export function PhotoCapture({ onCapture, onBack }: PhotoCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraReady, setCameraReady] = useState(false)
@@ -165,6 +167,10 @@ export function PhotoCapture({ onCapture }: PhotoCaptureProps) {
         갖고 있는 사진 고르기
         <input type="file" accept="image/*" onChange={handleFile} />
       </label>
+
+      <button type="button" className="ghost" onClick={onBack}>
+        뒤로
+      </button>
     </main>
   )
 }
