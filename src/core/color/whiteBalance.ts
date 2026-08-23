@@ -168,21 +168,38 @@ export function estimateNeutralReference(
 }
 
 /**
- * 기준색이 무채색이 되도록 채널 배율을 맞춘 새 이미지를 만든다.
+ * 기준색을 무채색으로 만드는 채널 배율을 낸다.
+ *
+ * 적용과 분리해 둔 이유: 노출 정규화 배율과 **곱해서 한 번에 적용**하기 위해서다.
+ * 따로 적용하면 이미지를 두 번 훑을 뿐 아니라, 노출 배율을 색 보정 전 기준으로
+ * 계산하게 돼 체계적으로 어긋난다(색 보정이 기준의 밝기를 바꾸기 때문).
+ */
+export function estimateWhiteBalanceGain(reference: Rgb): Rgb {
+  const mean = (reference.r + reference.g + reference.b) / 3
+
+  return {
+    r: clampGain(mean / reference.r),
+    g: clampGain(mean / reference.g),
+    b: clampGain(mean / reference.b),
+  }
+}
+
+/** 색에 채널 배율을 적용한다 */
+export function applyGainToColor(color: Rgb, gain: Rgb): Rgb {
+  return { r: color.r * gain.r, g: color.g * gain.g, b: color.b * gain.b }
+}
+
+/**
+ * 채널 배율을 적용한 새 이미지를 만든다.
  * 원본은 바꾸지 않는다 — 미리보기에 쓰이는 픽셀과 같은 배열이기 때문이다.
  */
-export function applyWhiteBalance(image: ImageLike, reference: Rgb): ImageLike {
-  const mean = (reference.r + reference.g + reference.b) / 3
-  const gainR = clampGain(mean / reference.r)
-  const gainG = clampGain(mean / reference.g)
-  const gainB = clampGain(mean / reference.b)
-
+export function applyChannelGain(image: ImageLike, gain: Rgb): ImageLike {
   const data = new Uint8ClampedArray(image.width * image.height * 4)
 
   for (let i = 0; i < data.length; i += 4) {
-    data[i] = image.data[i] * gainR
-    data[i + 1] = image.data[i + 1] * gainG
-    data[i + 2] = image.data[i + 2] * gainB
+    data[i] = image.data[i] * gain.r
+    data[i + 1] = image.data[i + 1] * gain.g
+    data[i + 2] = image.data[i + 2] * gain.b
     data[i + 3] = image.data[i + 3]
   }
 

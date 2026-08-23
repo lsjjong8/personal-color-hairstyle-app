@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest'
-import { estimateNeutralReference, applyWhiteBalance } from './whiteBalance'
+import {
+  estimateNeutralReference,
+  estimateWhiteBalanceGain,
+  applyChannelGain,
+} from './whiteBalance'
 import { srgbToLab, hueAngle } from './lab'
 import type { ImageLike, Rgb } from '../types'
 
@@ -100,6 +104,10 @@ describe('estimateNeutralReference', () => {
     expect(estimateNeutralReference(dark, REGION)).toBeNull()
   })
 })
+
+/** 기존 테스트가 쓰던 형태 — 기준색으로 곧장 보정한다 */
+const applyWhiteBalance = (image: ImageLike, reference: Rgb) =>
+  applyChannelGain(image, estimateWhiteBalanceGain(reference))
 
 describe('applyWhiteBalance', () => {
   test('기준색을 무채색으로 만든다', () => {

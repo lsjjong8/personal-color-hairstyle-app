@@ -1,9 +1,15 @@
 import { detectFace, type FaceLandmarkSet } from './adapters/faceLandmarkerAdapter'
-import { applyWhiteBalance, estimateNeutralReference } from './color/whiteBalance'
+import {
+  applyChannelGain,
+  applyGainToColor,
+  estimateNeutralReference,
+  estimateWhiteBalanceGain,
+} from './color/whiteBalance'
+import { combineGain, estimateExposureGain } from './color/exposure'
 import { judgeFaceShape } from './rules/faceShape'
 import { judgePersonalColor } from './rules/personalColor'
 import { sampleSkinLab } from './sampling/skinSampling'
-import type { AnalysisResult, ImageLike } from './types'
+import type { AnalysisResult, ImageLike, Point } from './types'
 
 /**
  * 분석 오케스트레이터 — 사진 한 장에서 판정 결과까지.
@@ -16,14 +22,33 @@ import type { AnalysisResult, ImageLike } from './types'
 /**
  * 얼굴 좌표가 이미 있을 때의 판정 — 외부 의존이 없다.
  *
- * 피부색을 재기 전에 조명 색을 걷어낸다. 눈 흰자를 무채색 기준으로 삼으며,
+ * 피부색을 재기 전에 조명을 두 축으로 걷어낸다 — **색**(whiteBalance)과
+ * **밝기**(exposure)다. 둘 다 눈 흰자를 기준자로 쓴다.
+ *
  * 기준을 찾지 못하면(눈 감음·안경 반사·과노출) 보정 없이 원본으로 진행한다 —
- * 보정 실패가 분석 실패가 되지는 않는다.
+ * 보정 실패가 분석 실패가 되지는 않는다. 억지로 보정하느니 원본이 덜 틀린다.
  */
+function correctLighting(image: ImageLike, neutralRegions: readonly Point[][]): ImageLike {
+  const reference = estimateNeutralReference(image, neutralRegions)
+
+  if (reference === null) {
+    return image
+  }
+
+  const colorGain = estimateWhiteBalanceGain(reference)
+  // 노출 배율은 **색 보정을 거친** 기준으로 잰다. 색 보정이 기준의 밝기를 바꾸므로
+  // 원본 기준으로 재면 목표 밝기가 체계적으로 어긋난다.
+  const exposure = estimateExposureGain(applyGainToColor(reference, colorGain))
+
+  return applyChannelGain(image, combineGain(colorGain, exposure))
+}
+
 export function analyzeFromFace(image: ImageLike, face: FaceLandmarkSet): AnalysisResult {
-  const reference = estimateNeutralReference(image, face.neutralRegions)
-  const balanced = reference === null ? image : applyWhiteBalance(image, reference)
-  const skinLab = sampleSkinLab(balanced, face.skinPoints, face.sampleRadius)
+  const skinLab = sampleSkinLab(
+    correctLighting(image, face.neutralRegions),
+    face.skinPoints,
+    face.sampleRadius,
+  )
 
   if (skinLab === null) {
     return { ok: false, reason: 'too-few-skin-pixels' }
