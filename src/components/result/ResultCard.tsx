@@ -15,7 +15,7 @@ interface ResultCardProps {
 export function ResultCard({ result }: ResultCardProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const { personalColor, faceShape } = result
+  const { personalColor, faceShape, lighting } = result
   const toneGuide = TONE_GUIDE[personalColor.tone12]
   const shapeGuide = FACE_SHAPE_GUIDE[faceShape.shape]
 
@@ -108,6 +108,21 @@ export function ResultCard({ result }: ResultCardProps) {
           <dd>{personalColor.evidence.chroma.toFixed(1)}</dd>
           <dt>얼굴 세로/가로</dt>
           <dd>{faceShape.evidence.lengthRatio.toFixed(2)}</dd>
+          {/*
+            건너뛴 사유는 적지 않는다 — 기준을 포기하는 경로가 넷이라
+            (저채도 픽셀 부족·너무 어두움·과노출·채널 클리핑) 하나를 골라 쓰면
+            나머지 셋에 대해 틀린 말을 하게 된다.
+          */}
+          <dt>조명 보정</dt>
+          <dd>{lighting.applied ? '적용됨' : '건너뜀'}</dd>
+          {/* 척도를 라벨에 단다 — 0~255이며 L*(0~100)가 아니다. 옮겨 적은 숫자가
+              어느 척도인지 모르면 재보정에서 두 스케일이 섞인다 */}
+          <dt>기준 밝기 (0~255)</dt>
+          <dd>{lighting.applied ? lighting.referenceLuma.toFixed(1) : '없음'}</dd>
+          {/* 잘림은 보정이 적용된 사진에서 오히려 잘 난다 — 배율이 1을 넘으면
+              밝은 피부 채널이 255에서 멈춘다. "적용됨"만으로는 못 거른다 */}
+          <dt>잘린 픽셀</dt>
+          <dd>{`${Math.round(lighting.clippedRatio * 100)}%`}</dd>
         </dl>
       </details>
     </section>

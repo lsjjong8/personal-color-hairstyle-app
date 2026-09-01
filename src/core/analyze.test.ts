@@ -161,3 +161,92 @@ describe('조명 보정 통합 — 흰자를 찾은 경우', () => {
     }
   })
 })
+
+/**
+ * 조명 보정 근거 — 판정값만으로는 알 수 없는 두 가지를 결과에 남긴다.
+ *
+ * 필요한 이유는 재보정이다. 목표 밝기(TARGET_REFERENCE_LUMA)는 표본 4장에서 나온
+ * 잠정값이라 실사용 분포로 다시 그어야 하는데, 기준 밝기가 결과에 없으면
+ * 동료가 그 값을 읽어 보낼 방법이 없다.
+ *
+ * 보정 적용 여부가 함께 필요한 이유는 **표본 오염**이다. 기준을 못 찾은 사진은
+ * 원본 그대로 판정되므로 다른 척도에서 나온 값인데, 겉보기로는 구분되지 않는다.
+ * 표시가 없으면 그 사진이 재보정 표본에 섞여도 걸러낼 수 없다.
+ */
+describe('조명 보정 근거', () => {
+  test('흰자를 찾으면 적용 표시와 기준 밝기를 남긴다', () => {
+    const result = analyzeFromFace(faceImage(NORMAL_SKIN, NORMAL_SCLERA), face)
+
+    if (!result.ok) throw new Error(`분석 실패: ${result.reason}`)
+
+    expect(result.lighting.applied).toBe(true)
+    // 색 보정이 기준을 채널 평균으로 정규화하므로, 기준 밝기는 흰자 채널 평균에 가깝다
+    const scleraMean = (NORMAL_SCLERA.r + NORMAL_SCLERA.g + NORMAL_SCLERA.b) / 3
+    expect(result.lighting.referenceLuma).toBeCloseTo(scleraMean, 0)
+  })
+
+  test('기준 밝기는 색 보정을 거친 값이다 — 보정 전 값과 구분된다', () => {
+    // 무채색 흰자로는 두 척도가 0.8밖에 안 벌어져 잘못된 구현도 통과한다.
+    // 색이 치우친 흰자(전구색)를 쓰면 차이가 커져 척도가 확실히 갈린다.
+    const tinted: Rgb = { r: 240, g: 220, b: 190 }
+    const result = analyzeFromFace(faceImage(NORMAL_SKIN, tinted), face)
+
+    if (!result.ok) throw new Error(`분석 실패: ${result.reason}`)
+
+    const afterColorCorrection = (tinted.r + tinted.g + tinted.b) / 3
+    const beforeColorCorrection = tinted.r * 0.299 + tinted.g * 0.587 + tinted.b * 0.114
+
+    expect(result.lighting.referenceLuma).toBeCloseTo(afterColorCorrection, 0)
+    // 두 값이 실제로 갈라져 있어야 이 테스트가 척도를 지킨다
+    expect(Math.abs(afterColorCorrection - beforeColorCorrection)).toBeGreaterThan(3)
+  })
+
+  test('흰자를 못 찾으면 건너뛴 사실을 남긴다 — 밝기는 없다', () => {
+    // 단색 이미지는 눈 영역도 피부색이라 채도 상한에 걸려 기준을 못 잡는다
+    const result = analyzeFromFace(solidImage(120, 120, { r: 225, g: 180, b: 150 }), face)
+
+    if (!result.ok) throw new Error(`분석 실패: ${result.reason}`)
+
+    expect(result.lighting.applied).toBe(false)
+    expect(result.lighting.referenceLuma).toBeNull()
+  })
+
+  test('보정으로 피부가 255에서 잘리면 그 비율을 남긴다', () => {
+    // 흰자가 어둡게 찍힌 사진(실내·그늘). 기준 밝기가 137쯤이라 배율이 1.7 가까이
+    // 되고, 피부 R채널(215)이 255를 넘어 잘린다. 잘린 픽셀은 원래 값을 잃었으므로
+    // 그 판정값은 다른 사진과 같은 척도가 아니다 — 표시가 없으면 걸러낼 수 없다.
+    const result = analyzeFromFace(
+      faceImage({ r: 215, g: 150, b: 120 }, { r: 140, g: 138, b: 134 }),
+      face,
+    )
+
+    if (!result.ok) throw new Error(`분석 실패: ${result.reason}`)
+
+    expect(result.lighting.applied).toBe(true)
+    expect(result.lighting.clippedRatio).toBeGreaterThan(0)
+  })
+
+  test('잘리지 않은 사진은 잘림 비율이 0이다', () => {
+    const result = analyzeFromFace(faceImage(NORMAL_SKIN, NORMAL_SCLERA), face)
+
+    if (!result.ok) throw new Error(`분석 실패: ${result.reason}`)
+
+    expect(result.lighting.clippedRatio).toBe(0)
+  })
+
+  test('기준 밝기가 사진의 노출을 따라 움직인다 — 재보정에 쓸 수 있는 값인지', () => {
+    const bright = analyzeFromFace(faceImage(NORMAL_SKIN, NORMAL_SCLERA), face)
+    const dark = analyzeFromFace(
+      faceImage(dim(NORMAL_SKIN, 0.6), dim(NORMAL_SCLERA, 0.6)),
+      face,
+    )
+
+    if (!bright.ok || !dark.ok) throw new Error('분석 실패')
+    if (bright.lighting.referenceLuma === null || dark.lighting.referenceLuma === null) {
+      throw new Error('기준 밝기가 없다')
+    }
+
+    // 값이 상수라면 재보정 근거가 되지 못한다 — 노출을 반영해야 한다
+    expect(dark.lighting.referenceLuma).toBeLessThan(bright.lighting.referenceLuma)
+  })
+})

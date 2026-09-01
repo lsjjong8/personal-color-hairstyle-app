@@ -36,9 +36,9 @@ describe('sampleSkinLab', () => {
     const result = sampleSkinLab(image, centerPoints, 4)
 
     expect(result).not.toBeNull()
-    expect(result?.l).toBeCloseTo(expected.l, 5)
-    expect(result?.a).toBeCloseTo(expected.a, 5)
-    expect(result?.b).toBeCloseTo(expected.b, 5)
+    expect(result?.lab.l).toBeCloseTo(expected.l, 5)
+    expect(result?.lab.a).toBeCloseTo(expected.a, 5)
+    expect(result?.lab.b).toBeCloseTo(expected.b, 5)
   })
 
   test('하이라이트·그림자가 섞여도 절사 평균이라 피부색 근처를 유지한다', () => {
@@ -53,7 +53,7 @@ describe('sampleSkinLab', () => {
     const result = sampleSkinLab(image, centerPoints, 4)
 
     expect(result).not.toBeNull()
-    expect(result?.l).toBeCloseTo(expected.l, 1)
+    expect(result?.lab.l).toBeCloseTo(expected.l, 1)
   })
 
   test('여러 영역의 픽셀을 함께 모은다', () => {
@@ -70,7 +70,7 @@ describe('sampleSkinLab', () => {
       3,
     )
 
-    expect(result?.l).toBeCloseTo(expected.l, 5)
+    expect(result?.lab.l).toBeCloseTo(expected.l, 5)
   })
 
   test('이미지 밖 좌표는 건너뛴다', () => {
@@ -86,6 +86,30 @@ describe('sampleSkinLab', () => {
 
     expect(sampleSkinLab(image, [], 4)).toBeNull()
     expect(sampleSkinLab(image, [{ x: -100, y: -100 }], 2)).toBeNull()
+  })
+
+  test('잘리지 않은 영역은 잘림 비율이 0이다', () => {
+    const image = solidImage(40, 40, skinColor)
+
+    expect(sampleSkinLab(image, centerPoints, 4)?.clippedRatio).toBe(0)
+  })
+
+  test('채널이 255에 닿은 픽셀을 잘림으로 센다', () => {
+    // 한 채널만 255인 경우도 잘림이다 — 밝기는 정상 범위에 남고 색만 틀어져
+    // 눈으로는 구분되지 않는 쪽이 오히려 위험하다
+    const image = solidImage(40, 40, { r: 255, g: 180, b: 150 })
+
+    expect(sampleSkinLab(image, centerPoints, 4)?.clippedRatio).toBe(1)
+  })
+
+  test('절사로 버린 픽셀은 잘림 계산에 넣지 않는다', () => {
+    // 반사광(흰색)은 밝기 상위라 절사로 빠진다. 판정에 쓰이지 않은 픽셀까지
+    // 세면 실제보다 나쁘게 나온다.
+    const image = solidImage(40, 40, skinColor)
+    paint(image, 18, 18, { r: 255, g: 255, b: 255 })
+    paint(image, 19, 18, { r: 255, g: 255, b: 255 })
+
+    expect(sampleSkinLab(image, centerPoints, 4)?.clippedRatio).toBe(0)
   })
 
   test('완전 투명 픽셀은 표본에서 제외한다', () => {

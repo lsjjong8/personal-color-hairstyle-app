@@ -95,10 +95,56 @@ export interface FaceShapeResult {
   }
 }
 
+/**
+ * 조명 보정이 어떻게 걸렸는지 — 판정값만으로는 알 수 없는 두 가지를 남긴다.
+ *
+ * 판정 결과가 아니라 **판정에 이르는 과정**의 사실이라 `PersonalColorResult`가
+ * 아니라 분석 결과 최상위에 둔다.
+ */
+/**
+ * 조명 보정이 걸렸는지와, 걸렸다면 무엇을 기준으로 삼았는지.
+ *
+ * 두 값을 union으로 묶은 이유: 따로 두면 `applied: false`인데 기준 밝기가
+ * 있는 것 같은 앞뒤 안 맞는 값을 만들 수 있다.
+ */
+export type LightingCorrection =
+  | {
+      /** 보정이 적용됐다 */
+      applied: true
+      /**
+       * 노출 정규화가 잰 기준 밝기(0~255). 색 보정을 거친 눈 흰자의 밝기이며
+       * `TARGET_REFERENCE_LUMA`와 같은 척도다 — 이 값의 실사용 분포가 그
+       * 목표값을 다시 긋는 근거가 된다.
+       */
+      referenceLuma: number
+    }
+  | {
+      /**
+       * 기준(눈 흰자)을 쓸 수 없어 원본 그대로 판정했다. 사유는 넷이다 —
+       * 저채도 픽셀 부족·기준이 너무 어두움·너무 밝음·채널 클리핑.
+       * 이 사진의 수치는 보정된 사진과 척도가 달라, 기준선을 다시 그을 때
+       * 섞으면 안 된다.
+       */
+      applied: false
+      referenceLuma: null
+    }
+
+export type LightingEvidence = LightingCorrection & {
+  /**
+   * 판정에 쓴 피부 표본 중 채널이 255에서 잘린 비율(0~1).
+   *
+   * 0보다 크면 그 수치는 다른 사진과 같은 척도가 아니다 — 보정이 적용됐어도
+   * 마찬가지다. 잘림은 보정 배율이 1을 넘을 때 생기므로 `applied: true`인
+   * 사진에서 오히려 잘 난다.
+   */
+  clippedRatio: number
+}
+
 export interface AnalysisSuccess {
   ok: true
   personalColor: PersonalColorResult
   faceShape: FaceShapeResult
+  lighting: LightingEvidence
 }
 
 /** 실패 사유 — UI가 사용자 문구로 번역한다 */

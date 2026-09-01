@@ -5,11 +5,11 @@ import {
   estimateNeutralReference,
   estimateWhiteBalanceGain,
 } from './color/whiteBalance'
-import { combineGain, estimateExposureGain } from './color/exposure'
+import { combineGain, estimateExposureGain, luma } from './color/exposure'
 import { judgeFaceShape } from './rules/faceShape'
 import { judgePersonalColor } from './rules/personalColor'
 import { sampleSkinLab } from './sampling/skinSampling'
-import type { AnalysisResult, ImageLike, Point } from './types'
+import type { AnalysisResult, ImageLike, LightingCorrection, Point } from './types'
 
 /**
  * 분석 오케스트레이터 — 사진 한 장에서 판정 결과까지.
@@ -28,36 +28,45 @@ import type { AnalysisResult, ImageLike, Point } from './types'
  * 기준을 찾지 못하면(눈 감음·안경 반사·과노출) 보정 없이 원본으로 진행한다 —
  * 보정 실패가 분석 실패가 되지는 않는다. 억지로 보정하느니 원본이 덜 틀린다.
  */
-function correctLighting(image: ImageLike, neutralRegions: readonly Point[][]): ImageLike {
+function correctLighting(
+  image: ImageLike,
+  neutralRegions: readonly Point[][],
+): { image: ImageLike; correction: LightingCorrection } {
   const reference = estimateNeutralReference(image, neutralRegions)
 
   if (reference === null) {
-    return image
+    return { image, correction: { applied: false, referenceLuma: null } }
   }
 
   const colorGain = estimateWhiteBalanceGain(reference)
   // 노출 배율은 **색 보정을 거친** 기준으로 잰다. 색 보정이 기준의 밝기를 바꾸므로
   // 원본 기준으로 재면 목표 밝기가 체계적으로 어긋난다.
-  const exposure = estimateExposureGain(applyGainToColor(reference, colorGain))
+  const neutralReference = applyGainToColor(reference, colorGain)
+  const exposure = estimateExposureGain(neutralReference)
 
-  return applyChannelGain(image, combineGain(colorGain, exposure))
+  return {
+    image: applyChannelGain(image, combineGain(colorGain, exposure)),
+    // 목표 밝기와 **같은 척도의 값**을 남긴다 — 배율이 아니라 잰 값이라야
+    // 실사용 분포로 목표를 다시 그을 수 있다.
+    correction: { applied: true, referenceLuma: luma(neutralReference) },
+  }
 }
 
 export function analyzeFromFace(image: ImageLike, face: FaceLandmarkSet): AnalysisResult {
-  const skinLab = sampleSkinLab(
-    correctLighting(image, face.neutralRegions),
-    face.skinPoints,
-    face.sampleRadius,
-  )
+  const corrected = correctLighting(image, face.neutralRegions)
+  const skin = sampleSkinLab(corrected.image, face.skinPoints, face.sampleRadius)
 
-  if (skinLab === null) {
+  if (skin === null) {
     return { ok: false, reason: 'too-few-skin-pixels' }
   }
 
   return {
     ok: true,
-    personalColor: judgePersonalColor(skinLab),
+    personalColor: judgePersonalColor(skin.lab),
     faceShape: judgeFaceShape(face.metrics),
+    // 잘림은 보정을 적용한 **뒤에** 생기므로 표본을 뽑고 나서야 알 수 있다.
+    // 그래서 보정 사실과 잘림 비율을 여기서 합친다.
+    lighting: { ...corrected.correction, clippedRatio: skin.clippedRatio },
   }
 }
 

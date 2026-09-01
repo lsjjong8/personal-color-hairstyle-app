@@ -1,6 +1,7 @@
 import { cpSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
@@ -38,4 +39,15 @@ export default defineConfig({
   // GitHub Pages 프로젝트 사이트 경로 (https://<user>.github.io/personal-color-hairstyle-app/)
   base: '/personal-color-hairstyle-app/',
   plugins: [react(), copyMediapipeWasm()],
+  test: {
+    /**
+     * 컴포넌트 테스트가 서로 쌓이지 않게 한다.
+     *
+     * `@testing-library/react`는 전역 `afterEach`가 있을 때만 렌더한 것을
+     * 자동으로 치운다. 이 설정이 없으면 앞 테스트가 그린 화면이 남아,
+     * 뒤 테스트가 같은 문구를 찾을 때 "여러 개가 걸린다"로 깨진다.
+     * 원인이 자기 테스트가 아니라 앞 테스트에 있어 찾기 어렵다.
+     */
+    globals: true,
+  },
 })

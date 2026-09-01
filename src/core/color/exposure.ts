@@ -35,7 +35,13 @@ export const TARGET_REFERENCE_LUMA = 232
 const MIN_GAIN = 0.4
 const MAX_GAIN = 3
 
-function luma(color: Rgb): number {
+/**
+ * sRGB 가중 평균 밝기(0~255). `TARGET_REFERENCE_LUMA`와 같은 척도다.
+ *
+ * 공개해 둔 이유: 호출부가 **보정에 쓴 기준 밝기를 결과에 남기기** 위해서다.
+ * 그 분포가 쌓여야 목표 밝기를 실사용 근거로 다시 그을 수 있다.
+ */
+export function luma(color: Rgb): number {
   return color.r * 0.299 + color.g * 0.587 + color.b * 0.114
 }
 
