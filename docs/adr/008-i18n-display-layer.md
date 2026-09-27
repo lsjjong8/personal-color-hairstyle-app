@@ -1,7 +1,7 @@
 # 008 — 다국어(영문): 도메인 키는 한국어로 두고 표시층만 번역한다
 
-- 상태: **초안 (제안, 2026-09-26)** — PO 승인 대기
-- 결정자: PO (승인 전)
+- 상태: **수락 (2026-09-28)** — 초안 2026-09-26. 승인은 설계를 고정할 뿐 착수 시점을 정하지 않는다 — 구현은 아래 §선행 조건(재가동 할 일 1~3) 뒤다
+- 결정자: PO (2026-09-28 승인)
 - 선행 결정: [003 백엔드 없음](003-no-backend-phase1.md), [005 결과 카드 canvas 직접 렌더](005-result-card-canvas-render.md)
 - 관련 지식: [context.md](../context.md) §1 12타입 분류, §3 얼굴형 5분류, §5 얼굴 이미지 개인정보
 - 구현 대상: `src/core/types.ts`(불변) · `src/core/guide/*` · `src/components/**` · `src/hooks/useAnalysis.ts` · `index.html`
