@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale'
 import type { ColorSwatch } from '../../core/guide/toneGuide'
 
 /**
@@ -13,13 +14,22 @@ import type { ColorSwatch } from '../../core/guide/toneGuide'
  *   - canvas 2D가 없는 환경에서도 배치를 검증할 수 있다.
  */
 
+/**
+ * 카드에 그릴 문자열 — **전부 호출자가 번역해서 넘긴다.**
+ * 이 파일은 언어를 모른다. 아는 것은 줄나눔 규칙(로케일)뿐이다.
+ */
 export interface CardContent {
+  /** 카드 머리글 */
+  header: string
   tone12: string
   toneOneLiner: string
+  /** 섹션 제목 3개 — 화면 소제목과 같은 키에서 온다 */
+  sections: { palette: string; hairColors: string; faceShape: string }
   palette: ColorSwatch[]
   hairColors: ColorSwatch[]
-  faceShape: string
   cutTips: string[]
+  /** 푸터 고지 */
+  notice: string
 }
 
 /** 4:5 비율 — 모바일 공유에 무난한 크기 */
@@ -42,6 +52,10 @@ const FONT_TONE12 = `700 92px ${FONT_FAMILY}`
 const FONT_ONE_LINER = `36px ${FONT_FAMILY}`
 const FONT_SECTION = `600 34px ${FONT_FAMILY}`
 const FONT_SWATCH_NAME = `28px ${FONT_FAMILY}`
+/** 칸을 넘는 이름은 한 단 낮춰 두 줄까지 허용한다 */
+const FONT_SWATCH_NAME_SMALL = `26px ${FONT_FAMILY}`
+const LINE_SWATCH_NAME = 32
+const MAX_SWATCH_NAME_LINES = 2
 const FONT_NOTICE = `26px ${FONT_FAMILY}`
 const bodyFont = (size: number): string => `${size}px ${FONT_FAMILY}`
 
@@ -62,9 +76,6 @@ const BODY_FONT_SIZES = [32, 30]
 
 /** 컷 제안은 이 개수 밑으로 줄이지 않는다 (`guide.test.ts`의 불변식과 같은 값) */
 const MIN_CUT_TIPS = 2
-
-const HEADER_TEXT = '퍼스널 컬러 · 재미로 보는 제안'
-const NOTICE_TEXT = '진단이 아닌 재미로 보는 제안입니다 · 사진은 기기를 떠나지 않습니다'
 
 /** 폭 측정기 — 실제로는 `context.measureText`, 테스트에서는 대체 측정기 */
 export type Measure = (text: string, font: string) => number
@@ -102,7 +113,11 @@ export interface CardSwatchRect {
 }
 
 /** 축약 규칙이 실제로 발동했는지 — 조용한 축약을 막기 위해 값으로 남긴다 */
-export type CardReduction = 'tips-trimmed' | 'oneliner-ellipsized' | 'body-font-reduced'
+export type CardReduction =
+  | 'tips-trimmed'
+  | 'oneliner-ellipsized'
+  | 'body-font-reduced'
+  | 'swatch-name-shortened'
 
 export interface CardLayout {
   width: number
@@ -128,12 +143,30 @@ export interface CardLayout {
 }
 
 /**
- * 최대 폭에 맞게 줄을 나눈다 — 한국어는 음절 단위 줄바꿈을 허용한다.
+ * 최대 폭에 맞게 줄을 나눈다.
  *
- * 영문 단어 경계 처리는 다국어 단계에서 로케일로 갈라 넣는다. 지금 규칙을
- * 통째로 바꾸면 한국어 줄나눔 위치가 조용히 달라진다.
+ * **로케일로 규칙을 가른다.** 한국어는 음절 단위 줄바꿈을 허용하고, 영문은
+ * 단어 경계를 우선한다 — 영문에 음절 규칙을 그대로 쓰면 `recommend`가
+ * `recomm` / `end`로 잘린다. 규칙을 언어 구분 없이 바꾸지 않는 이유는
+ * 한국어 문장에도 공백이 있어 **현재 줄나눔 위치가 조용히 달라지기** 때문이다.
+ *
+ * ⚠ 한 글자(또는 쪼갤 수 없는 한 단어)가 최대 폭보다 넓으면 그 줄은 폭을
+ * 넘긴 채 남는다. 더 쪼갤 수 없어서다 — 좁은 칸에 쓸 때 주의한다.
  */
 export function wrapText(
+  text: string,
+  maxWidth: number,
+  font: string,
+  measure: Measure,
+  locale: Locale = DEFAULT_LOCALE,
+): string[] {
+  return locale === 'en'
+    ? wrapByWord(text, maxWidth, font, measure)
+    : wrapByChar(text, maxWidth, font, measure)
+}
+
+/** 음절 단위 — 한국어 기존 동작 그대로 */
+function wrapByChar(
   text: string,
   maxWidth: number,
   font: string,
@@ -160,6 +193,77 @@ export function wrapText(
   return lines
 }
 
+/**
+ * 단어 경계 우선 — 한 단어가 폭을 넘을 때만 그 단어를 글자 단위로 쪼갠다.
+ *
+ * **하이픈 뒤도 경계로 본다.** `see-through`·`side-swept`처럼 하이픈으로 묶인
+ * 말이 실제 데이터에 있고, 스와치 칸은 폭이 206~285px로 좁아 거기서 음절 한가운데가
+ * 잘린다 — 이 함수가 막으려던 바로 그 증상이다.
+ */
+function wrapByWord(
+  text: string,
+  maxWidth: number,
+  font: string,
+  measure: Measure,
+): string[] {
+  const lines: string[] = []
+  let current = ''
+
+  const flush = (): void => {
+    if (current.length > 0) {
+      lines.push(current)
+      current = ''
+    }
+  }
+
+  for (const { text: piece, glue } of tokenize(text)) {
+    const candidate = current.length === 0 ? piece : `${current}${glue}${piece}`
+
+    if (measure(candidate, font) <= maxWidth) {
+      current = candidate
+      continue
+    }
+
+    flush()
+
+    if (measure(piece, font) <= maxWidth) {
+      current = piece
+      continue
+    }
+
+    // 한 조각이 줄보다 길다 — 이때만 글자 단위로 내려간다
+    const pieces = wrapByChar(piece, maxWidth, font, measure)
+
+    lines.push(...pieces.slice(0, -1))
+    current = pieces.at(-1) ?? ''
+  }
+
+  flush()
+
+  return lines
+}
+
+/**
+ * 영문을 줄바꿈 가능한 조각으로 나눈다.
+ *
+ * `glue`는 앞 조각과 다시 이을 때 넣을 글자다 — 공백으로 나뉜 말 사이에는
+ * 공백이, 하이픈 뒤에서 나뉜 조각 사이에는 아무것도 들어가지 않는다.
+ */
+function tokenize(text: string): Array<{ text: string; glue: string }> {
+  const tokens: Array<{ text: string; glue: string }> = []
+
+  for (const word of text.split(/\s+/).filter((part) => part.length > 0)) {
+    word
+      .split(/(?<=-)/)
+      .filter((part) => part.length > 0)
+      .forEach((piece, index) => {
+        tokens.push({ text: piece, glue: index === 0 ? ' ' : '' })
+      })
+  }
+
+  return tokens
+}
+
 /** 줄 수를 줄이고 마지막 줄을 말줄임표로 맺는다 */
 function ellipsize(
   lines: string[],
@@ -178,11 +282,11 @@ function ellipsize(
   const kept = lines.slice(0, keepCount)
   let last = kept[keepCount - 1] ?? ''
 
-  while (last.length > 0 && measure(`${last}…`, font) > maxWidth) {
+  while (last.length > 0 && measure(`${last}\u2026`, font) > maxWidth) {
     last = last.slice(0, -1)
   }
 
-  kept[keepCount - 1] = `${last}…`
+  kept[keepCount - 1] = `${last}\u2026`
 
   return kept
 }
@@ -197,9 +301,13 @@ function buildLayout(
   content: CardContent,
   measure: Measure,
   state: LayoutState,
+  locale: Locale,
 ): CardLayout {
   const blocks: CardTextBlock[] = []
   const swatches: CardSwatchRect[] = []
+  let shortenedSwatchNames = 0
+  const wrap = (text: string, maxWidth: number, font: string): string[] =>
+    wrapText(text, maxWidth, font, measure, locale)
 
   const push = (
     role: CardBlockRole,
@@ -215,13 +323,13 @@ function buildLayout(
   }
 
   // 푸터를 먼저 잡는다 — 고지 줄 수가 본문에 허용되는 세로 예산을 정한다
-  const noticeLines = wrapText(NOTICE_TEXT, CONTENT_WIDTH, FONT_NOTICE, measure)
+  const noticeLines = wrap(content.notice, CONTENT_WIDTH, FONT_NOTICE)
   const lastNoticeBaseline = CARD_HEIGHT - 60
   const firstNoticeBaseline = lastNoticeBaseline - (noticeLines.length - 1) * LINE_NOTICE
   const dividerY = firstNoticeBaseline - 50
 
   // 머리글
-  const headerLines = wrapText(HEADER_TEXT, CONTENT_WIDTH, FONT_HEADER, measure)
+  const headerLines = wrap(content.header, CONTENT_WIDTH, FONT_HEADER)
   headerLines.forEach((line, index) => {
     push(
       'header',
@@ -236,7 +344,7 @@ function buildLayout(
   const headerExtra = (headerLines.length - 1) * LINE_HEADER
 
   // 타입 이름
-  const toneLines = wrapText(content.tone12, CONTENT_WIDTH, FONT_TONE12, measure)
+  const toneLines = wrap(content.tone12, CONTENT_WIDTH, FONT_TONE12)
   toneLines.forEach((line, index) => {
     push(
       'tone12',
@@ -252,7 +360,7 @@ function buildLayout(
 
   // 타입 한 줄 설명
   let y = 295 + headerExtra + toneExtra
-  const oneLinerAll = wrapText(content.toneOneLiner, CONTENT_WIDTH, FONT_ONE_LINER, measure)
+  const oneLinerAll = wrap(content.toneOneLiner, CONTENT_WIDTH, FONT_ONE_LINER)
   const oneLinerLines = ellipsize(
     oneLinerAll,
     state.oneLinerLines,
@@ -272,33 +380,64 @@ function buildLayout(
     return baseline + 28
   }
 
+  /**
+   * 색 칸과 이름.
+   *
+   * 이름이 칸보다 넓으면 글꼴을 한 단 낮춰 **두 줄까지** 허용한다. 종전에는
+   * `fillText`의 가로 압축에 맡겨 찌그러진 글자가 나왔다 — 영문 색 이름은
+   * 한국어보다 길어 그 증상이 잦아진다. 두 줄이 되면 그만큼 아래로 민다.
+   */
   const swatchRow = (row: ColorSwatch[], top: number): number => {
     const size = (CONTENT_WIDTH - SWATCH_GAP * (row.length - 1)) / row.length
+    let maxNameLines = 1
 
     row.forEach((swatch, index) => {
       const left = PADDING + index * (size + SWATCH_GAP)
 
       swatches.push({ hex: swatch.hex, x: left, y: top, width: size, height: SWATCH_HEIGHT })
-      push(
-        'swatchName',
-        swatch.name,
-        left + size / 2,
-        top + SWATCH_HEIGHT + 42,
-        FONT_SWATCH_NAME,
-        COLOR_MUTED,
+
+      const fitsOnOneLine = measure(swatch.name, FONT_SWATCH_NAME) <= size
+      const nameFont = fitsOnOneLine ? FONT_SWATCH_NAME : FONT_SWATCH_NAME_SMALL
+      // 두 줄로도 안 들어가면 **말줄임한다** — 잘라 버리면 이름이 조용히 사라진다
+      const wrapped = fitsOnOneLine ? [swatch.name] : wrap(swatch.name, size, nameFont)
+      const nameLines = ellipsize(
+        wrapped,
+        MAX_SWATCH_NAME_LINES,
+        nameFont,
         size,
-        'center',
+        measure,
       )
+
+      // 이름이 줄었으면 값으로 알린다 — 말줄임은 글자가 사라지는 일이고,
+      // 사라진 것을 반환값 어디에도 안 적으면 조용한 축약이 된다
+      if (nameLines.length < wrapped.length || !fitsOnOneLine) {
+        shortenedSwatchNames += 1
+      }
+
+      maxNameLines = Math.max(maxNameLines, nameLines.length)
+
+      nameLines.forEach((line, lineIndex) => {
+        push(
+          'swatchName',
+          line,
+          left + size / 2,
+          top + SWATCH_HEIGHT + 42 + lineIndex * LINE_SWATCH_NAME,
+          nameFont,
+          COLOR_MUTED,
+          size,
+          'center',
+        )
+      })
     })
 
-    return top + SWATCH_HEIGHT + 70
+    return top + SWATCH_HEIGHT + 70 + (maxNameLines - 1) * LINE_SWATCH_NAME
   }
 
-  y = swatchRow(content.palette, section('어울리는 색', 40))
-  y = swatchRow(content.hairColors, section('염색해 본다면', 24))
+  y = swatchRow(content.palette, section(content.sections.palette, 40))
+  y = swatchRow(content.hairColors, section(content.sections.hairColors, 24))
 
   // 컷 제안이 하나도 없으면 이 제목이 마지막 글자가 된다 — 실재하는 베이스라인을 쥔다
-  const faceTitleBaseline = section(`얼굴형 · ${content.faceShape}`, 24) - 28
+  const faceTitleBaseline = section(content.sections.faceShape, 24) - 28
   y = faceTitleBaseline + 28 + 22
 
   // 컷 방향 제안
@@ -306,7 +445,7 @@ function buildLayout(
   let lastBodyBaseline = faceTitleBaseline
 
   for (const tip of content.cutTips.slice(0, state.tipCount)) {
-    for (const line of wrapText(`· ${tip}`, CONTENT_WIDTH, font, measure)) {
+    for (const line of wrap(`· ${tip}`, CONTENT_WIDTH, font)) {
       push('cutTip', line, PADDING, y, font, COLOR_TEXT, CONTENT_WIDTH)
       lastBodyBaseline = y
       y += LINE_BODY
@@ -343,6 +482,10 @@ function buildLayout(
     reductions.push('body-font-reduced')
   }
 
+  if (shortenedSwatchNames > 0) {
+    reductions.push('swatch-name-shortened')
+  }
+
   return {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -365,12 +508,16 @@ function buildLayout(
  * 말줄임 ③본문 글자 한 단 축소. 카드 크기 1080×1350은 건드리지 않는다 —
  * 4:5가 공유 플랫폼 전제다.
  */
-export function layoutCard(content: CardContent, measure: Measure): CardLayout {
+export function layoutCard(
+  content: CardContent,
+  measure: Measure,
+  locale: Locale = DEFAULT_LOCALE,
+): CardLayout {
   const fullTips = content.cutTips.length
   const minTips = Math.min(MIN_CUT_TIPS, fullTips)
   const fullOneLinerLines = Math.max(
     1,
-    wrapText(content.toneOneLiner, CONTENT_WIDTH, FONT_ONE_LINER, measure).length,
+    wrapText(content.toneOneLiner, CONTENT_WIDTH, FONT_ONE_LINER, measure, locale).length,
   )
 
   const ladder: LayoutState[] = []
@@ -394,7 +541,7 @@ export function layoutCard(content: CardContent, measure: Measure): CardLayout {
   let layout: CardLayout | null = null
 
   for (const state of ladder) {
-    layout = buildLayout(content, measure, state)
+    layout = buildLayout(content, measure, state, locale)
 
     if (layout.overflowPx === 0) {
       return layout
@@ -403,7 +550,7 @@ export function layoutCard(content: CardContent, measure: Measure): CardLayout {
 
   // 사다리 끝까지 갔는데도 넘친다 — 가장 줄인 배치를 넘침 값과 함께 돌려준다.
   // `ladder`는 항상 한 칸 이상이라 `layout`이 null로 남지 않는다.
-  return layout ?? buildLayout(content, measure, ladder[0])
+  return layout ?? buildLayout(content, measure, ladder[0], locale)
 }
 
 /** 계산된 배치를 canvas에 옮겨 그린다 — 여기에는 판단이 없다 */
@@ -459,6 +606,7 @@ function paint(context: CanvasRenderingContext2D, layout: CardLayout): void {
 export function drawResultCard(
   canvas: HTMLCanvasElement,
   content: CardContent,
+  locale: Locale = DEFAULT_LOCALE,
 ): CardLayout {
   canvas.width = CARD_WIDTH
   canvas.height = CARD_HEIGHT
@@ -474,7 +622,7 @@ export function drawResultCard(
     return context.measureText(text).width
   }
 
-  const layout = layoutCard(content, measure)
+  const layout = layoutCard(content, measure, locale)
 
   // 서버가 없어 보낼 곳이 없다(ADR-003). 남길 수 있는 곳은 콘솔뿐이라
   // 여기에라도 남긴다 — 조용히 넘치는 것보다 낫다.

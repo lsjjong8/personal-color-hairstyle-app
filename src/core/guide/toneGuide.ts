@@ -1,4 +1,5 @@
 import type { Tone12 } from '../types'
+import type { Locale } from '../../i18n/locale'
 
 /**
  * 12타입별 어울리는 색 팔레트·염색 추천 (context.md §1·§3).
@@ -21,7 +22,7 @@ export interface ToneGuide {
   hairColors: ColorSwatch[]
 }
 
-export const TONE_GUIDE: Record<Tone12, ToneGuide> = {
+const TONE_GUIDE_KO: Record<Tone12, ToneGuide> = {
   '봄 라이트': {
     oneLiner: '밝고 화사한 색이 얼굴을 환하게 살려 주는 타입',
     palette: [
@@ -190,4 +191,146 @@ export const TONE_GUIDE: Record<Tone12, ToneGuide> = {
       { name: '쿨 다크 브라운', hex: '#3a2f2b' },
     ],
   },
+}
+
+/**
+ * 영문 한 줄 요약 — **원어민 검토 전 초안**이다.
+ * 직역이 아니라 영어권에서 읽히는 형태를 택했다.
+ */
+const TONE_ONE_LINER_EN: Record<Tone12, string> = {
+  '봄 라이트': 'Bright, airy colors light up your face',
+  '봄 브라이트': 'Clear, vivid colors bring out your energy',
+  '봄 웜': 'Warm, golden-toned colors sit well on you',
+  '여름 라이트': 'Soft pastels keep your skin looking clear',
+  '여름 뮤트': 'Muted, toned-down colors set your mood',
+  '여름 쿨': 'Cool, blue-toned colors tidy up your look',
+  '가을 뮤트': 'Hazy, warm colors blend in naturally',
+  '가을 딥': 'Deep, rich colors give you presence',
+  '가을 웜': 'Earth and autumn-leaf colors suit you',
+  '겨울 브라이트': 'Sharp, vivid colors make your features stand out',
+  '겨울 딥': 'Dark, weighty colors bring your face to life',
+  '겨울 쿨': 'High contrast and cool primaries suit you',
+}
+
+/**
+ * 색 이름 영문 대조표.
+ *
+ * ★**hex는 여기 적지 않는다.** 영문 표를 한국어 표에서 만들어 hex를 그대로
+ * 물려받으므로 두 언어의 색이 어긋날 수가 없다. 설계는 이 위험을 테스트로
+ * 막자고 했으나(§3 ⓑ), 84개 hex를 손으로 다시 적는 것 자체가 그 위험의
+ * 원인이라 구조로 없앴다. 대조 테스트는 회귀 가드로 남겨 둔다.
+ */
+const SWATCH_NAME_EN: Record<string, string> = {
+  살구: 'Apricot',
+  '라이트 피치': 'Light Peach',
+  크림: 'Cream',
+  민트: 'Mint',
+  '허니 브라운': 'Honey Brown',
+  '밀크 티 브라운': 'Milk Tea Brown',
+  '라이트 골드 브라운': 'Light Gold Brown',
+  '선명한 코랄': 'Vivid Coral',
+  '오렌지 레드': 'Orange Red',
+  '청사과 그린': 'Green Apple',
+  터콰이즈: 'Turquoise',
+  '브라이트 카퍼': 'Bright Copper',
+  '오렌지 브라운': 'Orange Brown',
+  '골드 브라운': 'Gold Brown',
+  코랄: 'Coral',
+  피치: 'Peach',
+  '골든 옐로우': 'Golden Yellow',
+  아이보리: 'Ivory',
+  '골든 브라운': 'Golden Brown',
+  '카라멜 브라운': 'Caramel Brown',
+  라벤더: 'Lavender',
+  '베이비 핑크': 'Baby Pink',
+  '스카이 블루': 'Sky Blue',
+  '라이트 그레이': 'Light Gray',
+  '밀크 애쉬 브라운': 'Milk Ash Brown',
+  '라이트 애쉬': 'Light Ash',
+  '애쉬 베이지': 'Ash Beige',
+  '더스티 핑크': 'Dusty Pink',
+  '로즈 브라운': 'Rose Brown',
+  '그레이시 블루': 'Grayish Blue',
+  모브: 'Mauve',
+  '애쉬 브라운': 'Ash Brown',
+  '다크 애쉬': 'Dark Ash',
+  '로즈 핑크': 'Rose Pink',
+  '블루 그레이': 'Blue Gray',
+  '소프트 화이트': 'Soft White',
+  라일락: 'Lilac',
+  '쿨 애쉬 브라운': 'Cool Ash Brown',
+  '다크 브라운': 'Dark Brown',
+  '블루 블랙': 'Blue Black',
+  베이지: 'Beige',
+  카키: 'Khaki',
+  '더스티 오렌지': 'Dusty Orange',
+  코코아: 'Cocoa',
+  '모카 브라운': 'Mocha Brown',
+  '애쉬 카키 브라운': 'Ash Khaki Brown',
+  '밀크 브라운': 'Milk Brown',
+  버건디: 'Burgundy',
+  '딥 올리브': 'Deep Olive',
+  테라코타: 'Terracotta',
+  '다크 초콜릿': 'Dark Chocolate',
+  '딥 카퍼': 'Deep Copper',
+  '블랙 브라운': 'Black Brown',
+  캐멀: 'Camel',
+  머스터드: 'Mustard',
+  올리브: 'Olive',
+  벽돌색: 'Brick',
+  '초콜릿 브라운': 'Chocolate Brown',
+  '다크 카퍼': 'Dark Copper',
+  '카키 브라운': 'Khaki Brown',
+  '비비드 핑크': 'Vivid Pink',
+  '코발트 블루': 'Cobalt Blue',
+  '레몬 옐로우': 'Lemon Yellow',
+  '퓨어 화이트': 'Pure White',
+  '딥 바이올렛 브라운': 'Deep Violet Brown',
+  '딥 와인': 'Deep Wine',
+  '다크 네이비': 'Dark Navy',
+  에메랄드: 'Emerald',
+  블랙: 'Black',
+  '다크 와인 블랙': 'Dark Wine Black',
+  '딥 블루 블랙': 'Deep Blue Black',
+  '로얄 블루': 'Royal Blue',
+  푸시아: 'Fuchsia',
+  '쿨 다크 브라운': 'Cool Dark Brown',
+}
+
+/** 한국어 색 이름을 영문으로 옮긴다 — 표에 없으면 원문을 그대로 둔다 */
+export function swatchNameEn(name: string): string {
+  return SWATCH_NAME_EN[name] ?? name
+}
+
+/** 대조표에 빠진 색 이름 — 완전성 테스트가 이 값을 본다 */
+export function untranslatedSwatchNames(): string[] {
+  const missing = new Set<string>()
+
+  for (const guide of Object.values(TONE_GUIDE_KO)) {
+    for (const swatch of [...guide.palette, ...guide.hairColors]) {
+      if (SWATCH_NAME_EN[swatch.name] === undefined) {
+        missing.add(swatch.name)
+      }
+    }
+  }
+
+  return [...missing].sort()
+}
+
+const TONE_GUIDE_EN: Record<Tone12, ToneGuide> = Object.fromEntries(
+  Object.entries(TONE_GUIDE_KO).map(([tone, guide]) => [
+    tone,
+    {
+      oneLiner: TONE_ONE_LINER_EN[tone as Tone12],
+      // hex는 손대지 않는다 — 이름만 갈아 끼운다
+      palette: guide.palette.map((s) => ({ ...s, name: swatchNameEn(s.name) })),
+      hairColors: guide.hairColors.map((s) => ({ ...s, name: swatchNameEn(s.name) })),
+    },
+  ]),
+) as Record<Tone12, ToneGuide>
+
+/** 로케일별 12타입 가이드 — 표 전체를 감싼다(ADR-008) */
+export const TONE_GUIDE: Record<Locale, Record<Tone12, ToneGuide>> = {
+  ko: TONE_GUIDE_KO,
+  en: TONE_GUIDE_EN,
 }

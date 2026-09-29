@@ -71,7 +71,9 @@ function success(): AnalysisSuccess {
 beforeEach(() => {
   analyzePhoto.mockReset()
   analyzePhoto.mockResolvedValue(success())
-  window.history.replaceState(null, '', '/')
+  // jsdom의 navigator.language는 en-US다 — 쿼리로 언어를 고정하지 않으면
+  // 자동 감지가 영어를 골라 이 테스트의 기대 문구와 어긋난다(동작은 설계대로다)
+  window.history.replaceState(null, '', '/?lang=ko')
 })
 
 afterEach(() => {
@@ -134,6 +136,49 @@ describe('화면이 이어진다', () => {
     const alert = await screen.findByRole('alert')
 
     expect(alert.textContent).toContain('얼굴을 찾지 못했습니다')
+  })
+})
+
+describe('언어 전환', () => {
+  test('토글을 누르면 화면 전체가 언어를 따라간다', async () => {
+    render(<App />)
+
+    expect(screen.getByRole('button', { name: '시작하기' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /English/ }))
+
+    expect(await screen.findByRole('button', { name: 'Start' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '시작하기' })).toBeNull()
+    expect(window.location.search).toBe('?lang=en')
+  })
+
+  test('화면을 넘어가도 언어가 유지된다', async () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: /English/ }))
+    await screen.findByRole('button', { name: 'Start' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    expect(await screen.findByRole('heading', { name: '사진 준비' })).toBeTruthy()
+    // 사진 화면은 대역이라 제목이 한국어로 고정돼 있다 — 언어 상태는 토글이 증명한다
+    expect(screen.getByRole('button', { name: /한국어/ })).toBeTruthy()
+  })
+
+  test('실패 문구도 언어를 따라간다', async () => {
+    analyzePhoto.mockResolvedValue({ ok: false, reason: 'no-face-detected' })
+
+    render(<App />)
+    await goToCapture()
+
+    fireEvent.click(screen.getByRole('button', { name: '대역 촬영' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('얼굴을 찾지 못했습니다')
+
+    fireEvent.click(screen.getByRole('button', { name: /English/ }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      "We couldn't find a face",
+    )
   })
 })
 

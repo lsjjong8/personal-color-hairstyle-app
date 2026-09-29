@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { UI_TEXT } from '../../i18n/uiText'
 import { PhotoCapture, type CapturedPhoto } from './PhotoCapture'
+
+const t = UI_TEXT.ko
 
 /**
  * 사진 입력 검증 — 두 경로가 **끝까지 간다**는 것을 잰다.
@@ -73,7 +76,7 @@ function renderScreen() {
   const onCapture = vi.fn<(photo: CapturedPhoto) => void>()
   const onBack = vi.fn()
 
-  render(<PhotoCapture onCapture={onCapture} onBack={onBack} />)
+  render(<PhotoCapture onCapture={onCapture} onBack={onBack} t={t} />)
 
   return { onCapture, onBack }
 }
@@ -136,7 +139,7 @@ describe('카메라 경로', () => {
   })
 
   test('화면을 떠나면 카메라를 끈다', async () => {
-    const view = render(<PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} />)
+    const view = render(<PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} t={t} />)
 
     await waitFor(() => expect(shootButton().disabled).toBe(false))
 
@@ -218,6 +221,90 @@ describe('실패가 조용하지 않다', () => {
       await screen.findByText('사진을 읽지 못했습니다. 다른 파일로 시도해 주세요.'),
     ).toBeTruthy()
     expect(onCapture).not.toHaveBeenCalled()
+  })
+})
+
+describe('언어를 바꿔도 카메라를 다시 잡지 않는다', () => {
+  /**
+   * ★이 화면의 가장 위험한 경로였다. 실패 문구를 **상태에 문자열로** 담으면
+   * 그것을 만드는 `t`가 카메라 effect 의존성에 들어가고, 언어를 바꿀 때마다
+   * 카메라가 끊겼다 다시 잡힌다. 그 수백 ms 사이에 촬영을 누르면
+   * `video.videoWidth`가 0이라 0 크기 canvas가 만들어지고 `getImageData`가
+   * 예외를 던진다 — 에러 경계가 없어 화면이 흰색이 된다.
+   *
+   * 사유 키만 들고 있으면 그 연쇄가 통째로 사라진다.
+   */
+  test('t가 바뀌어도 getUserMedia를 다시 부르지 않는다', async () => {
+    const view = render(
+      <PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} t={UI_TEXT.ko} />,
+    )
+
+    await waitFor(() => expect(shootButton().disabled).toBe(false))
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+
+    view.rerender(
+      <PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} t={UI_TEXT.en} />,
+    )
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(stop).not.toHaveBeenCalled()
+    // 카메라가 살아 있으니 촬영 버튼도 잠기지 않는다
+    expect(screen.getByRole('button', { name: 'Take photo' }).hasAttribute('disabled')).toBe(
+      false,
+    )
+  })
+
+  test('이미 떠 있는 실패 문구도 언어를 따라간다', async () => {
+    getUserMedia.mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
+
+    const view = render(
+      <PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} t={UI_TEXT.ko} />,
+    )
+
+    await screen.findByText(UI_TEXT.ko.capture.cameraFailed)
+
+    view.rerender(
+      <PhotoCapture onCapture={vi.fn()} onBack={vi.fn()} t={UI_TEXT.en} />,
+    )
+
+    expect(screen.getByText(UI_TEXT.en.capture.cameraFailed)).toBeTruthy()
+    expect(screen.queryByText(UI_TEXT.ko.capture.cameraFailed)).toBeNull()
+  })
+
+  test('카메라가 끊기면 촬영 버튼도 함께 잠긴다', async () => {
+    const { onCapture } = renderScreen()
+
+    await waitFor(() => expect(shootButton().disabled).toBe(false))
+
+    const video = document.querySelector('video')
+
+    if (video === null) {
+      throw new Error('미리보기 video를 찾지 못했다')
+    }
+
+    Object.defineProperty(video, 'videoWidth', { value: 1440, configurable: true })
+    Object.defineProperty(video, 'videoHeight', { value: 1080, configurable: true })
+
+    fireEvent.click(shootButton())
+
+    expect(onCapture).toHaveBeenCalledTimes(1)
+    expect(shootButton().disabled).toBe(true)
+  })
+
+  test('영상 크기가 0이면 찍지 않고 문구를 띄운다 — 0 크기 canvas를 만들지 않는다', async () => {
+    const { onCapture } = renderScreen()
+
+    await waitFor(() => expect(shootButton().disabled).toBe(false))
+
+    // 카메라를 다시 잡는 중이면 이 값이 0이다
+    const video = document.querySelector('video')
+    Object.defineProperty(video, 'videoWidth', { value: 0, configurable: true })
+    Object.defineProperty(video, 'videoHeight', { value: 0, configurable: true })
+
+    fireEvent.click(shootButton())
+
+    expect(onCapture).not.toHaveBeenCalled()
+    expect(screen.getByText(UI_TEXT.ko.capture.shootFailed)).toBeTruthy()
   })
 })
 

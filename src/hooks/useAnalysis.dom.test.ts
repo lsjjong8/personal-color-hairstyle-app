@@ -84,16 +84,10 @@ describe('상태 전이', () => {
   })
 
   test.each([
-    [
-      'no-face-detected',
-      '얼굴을 찾지 못했습니다. 얼굴이 정면으로 크게 나온 사진으로 다시 시도해 주세요.',
-    ],
-    [
-      'too-few-skin-pixels',
-      '피부색을 충분히 읽지 못했습니다. 조금 더 밝은 곳에서 다시 찍어 주세요.',
-    ],
-    ['model-load-failed', '분석 준비에 실패했습니다. 새로고침 후 다시 시도해 주세요.'],
-  ] as const)('실패 사유 %s가 사용자 문구로 옮겨진다', async (reason, message) => {
+    'no-face-detected',
+    'too-few-skin-pixels',
+    'model-load-failed',
+  ] as const)('실패 사유 %s를 문구로 바꾸지 않고 그대로 내보낸다', async (reason) => {
     analyzePhoto.mockResolvedValue({ ok: false, reason })
 
     const { result } = renderHook(() => useAnalysis())
@@ -102,7 +96,7 @@ describe('상태 전이', () => {
       await result.current.run(source, image)
     })
 
-    expect(result.current.state).toEqual({ status: 'failed', message })
+    expect(result.current.state).toEqual({ status: 'failed', reason })
   })
 })
 

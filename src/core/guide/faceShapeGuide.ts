@@ -1,4 +1,5 @@
 import type { FaceShape } from '../types'
+import type { Locale } from '../../i18n/locale'
 
 /**
  * 얼굴형 5분류별 컷 방향 제안 (context.md §3).
@@ -13,7 +14,7 @@ export interface FaceShapeGuide {
   cutTips: string[]
 }
 
-export const FACE_SHAPE_GUIDE: Record<FaceShape, FaceShapeGuide> = {
+const FACE_SHAPE_GUIDE_KO: Record<FaceShape, FaceShapeGuide> = {
   계란형: {
     oneLiner: '균형이 잡혀 있어 대부분의 스타일이 어울리는 얼굴형',
     cutTips: [
@@ -53,4 +54,58 @@ export const FACE_SHAPE_GUIDE: Record<FaceShape, FaceShapeGuide> = {
       '정수리 위주의 볼륨은 위쪽을 더 넓어 보이게 할 수 있어요',
     ],
   },
+}
+
+/**
+ * 영문 얼굴형 가이드 — **원어민 검토 전 초안**이다.
+ *
+ * 한국어 표와 항목 수가 같아야 한다(컷 제안 개수 포함). 개수가 갈리면
+ * 카드의 세로 예산이 언어마다 달라지고, 한쪽에서만 넘친다.
+ */
+const FACE_SHAPE_GUIDE_EN: Record<FaceShape, FaceShapeGuide> = {
+  계란형: {
+    oneLiner: 'A balanced shape that carries most styles well',
+    cutTips: [
+      'Length and volume are wide open — try the style you actually want',
+      'Cuts that reveal your face line, rather than hide it, play to your strength',
+    ],
+  },
+  둥근형: {
+    oneLiner: 'A soft look — vertical lines make it read slimmer',
+    cutTips: [
+      'A layered cut with crown volume draws the eye upward',
+      'Keep side volume restrained; hair falling along the jaw reads slimmer',
+      'Part slightly off-centre rather than dead centre to lengthen the face',
+    ],
+  },
+  각진형: {
+    oneLiner: 'A defined jawline — soft curves ease the impression',
+    cutTips: [
+      'Soft waves or layers around the jaw take the edge off the angles',
+      'A side-swept fringe softens the straight line of the forehead',
+      'A blunt bob ending at the jaw can emphasise the angles instead',
+    ],
+  },
+  긴형: {
+    oneLiner: 'A long vertical ratio — width brings it into balance',
+    cutTips: [
+      'A fringe shortens how long the face reads',
+      'Medium length with side volume and a C-curl evens it out',
+      'Long, flat hair with no volume can make the face look longer still',
+    ],
+  },
+  역삼각형: {
+    oneLiner: 'A wide forehead and narrow chin — volume below suits you',
+    cutTips: [
+      'A bob or C-curl with volume near the jaw balances the lower half',
+      'A see-through fringe softens the width of the forehead',
+      'Volume concentrated on the crown can widen the top even further',
+    ],
+  },
+}
+
+/** 로케일별 얼굴형 가이드 — 표 전체를 감싼다(ADR-008) */
+export const FACE_SHAPE_GUIDE: Record<Locale, Record<FaceShape, FaceShapeGuide>> = {
+  ko: FACE_SHAPE_GUIDE_KO,
+  en: FACE_SHAPE_GUIDE_EN,
 }

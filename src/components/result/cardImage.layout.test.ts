@@ -2,6 +2,9 @@ import { describe, expect, test } from 'vitest'
 import { FACE_SHAPE_GUIDE } from '../../core/guide/faceShapeGuide'
 import { TONE_GUIDE } from '../../core/guide/toneGuide'
 import type { FaceShape, Tone12 } from '../../core/types'
+import { FACE_SHAPE_LABEL, TONE12_LABEL } from '../../i18n/labels'
+import { SUPPORTED_LOCALES, type Locale } from '../../i18n/locale'
+import { cardNotice, UI_TEXT } from '../../i18n/uiText'
 import {
   drawResultCard,
   layoutCard,
@@ -45,21 +48,28 @@ function approxMeasure(scale = 1): Measure {
 
 const measure = approxMeasure()
 
-function contentFor(tone: Tone12, face: FaceShape): CardContent {
-  const guide = TONE_GUIDE[tone]
+function contentFor(tone: Tone12, face: FaceShape, locale: Locale = 'ko'): CardContent {
+  const guide = TONE_GUIDE[locale][tone]
+  const text = UI_TEXT[locale]
 
   return {
-    tone12: tone,
+    header: text.card.header,
+    tone12: TONE12_LABEL[locale][tone],
     toneOneLiner: guide.oneLiner,
+    sections: {
+      palette: text.result.sectionPalette,
+      hairColors: text.result.sectionHairColors,
+      faceShape: `${text.result.faceShapePrefix} \u00b7 ${FACE_SHAPE_LABEL[locale][face]}`,
+    },
     palette: guide.palette,
     hairColors: guide.hairColors,
-    faceShape: face,
-    cutTips: FACE_SHAPE_GUIDE[face].cutTips,
+    cutTips: FACE_SHAPE_GUIDE[locale][face].cutTips,
+    notice: cardNotice(text),
   }
 }
 
-const TONES = Object.keys(TONE_GUIDE) as Tone12[]
-const FACES = Object.keys(FACE_SHAPE_GUIDE) as FaceShape[]
+const TONES = Object.keys(TONE_GUIDE.ko) as Tone12[]
+const FACES = Object.keys(FACE_SHAPE_GUIDE.ko) as FaceShape[]
 const COMBOS = TONES.flatMap((tone) => FACES.map((face) => [tone, face] as const))
 
 /** 폭 예산을 가장 크게 넘는 블록의 초과분 — 0이면 전부 예산 안 */
@@ -88,7 +98,7 @@ describe('실데이터 60조합 — 게이트가 정상 입력을 통과시킨�
       .map((block) => block.text)
       .join('')
 
-    for (const tip of FACE_SHAPE_GUIDE[face].cutTips) {
+    for (const tip of FACE_SHAPE_GUIDE.ko[face].cutTips) {
       // 줄나눔으로 쪼개지므로 공백을 지운 뒤 포함 관계로 본다
       expect(rendered.replace(/[\s·]/g, '')).toContain(tip.replace(/[\s·]/g, ''))
     }
@@ -408,20 +418,57 @@ describe('그리기는 배치가 정한 것만 옮긴다', () => {
     expect(texts.every((t) => t.maxWidth === undefined)).toBe(true)
   })
 
-  test('칸을 넘는 스와치 이름에는 마지막 수단으로 가로 압축을 건다', () => {
+  test('칸을 넘는 이름은 압축이 아니라 두 줄과 말줄임으로 담는다', () => {
     const { canvas, texts } = recordingCanvas()
     const content = contentFor('봄 라이트', '둥근형')
     const 긴이름 = '아주아주아주아주아주긴색이름입니다'
 
-    drawResultCard(canvas, {
+    const layout = drawResultCard(canvas, {
       ...content,
       palette: [{ ...content.palette[0], name: 긴이름 }, ...content.palette.slice(1)],
     })
 
-    const squeezed = texts.find((t) => t.text === 긴이름)
+    // 원문 그대로 그려진 블록은 없다 — 나뉘었거나 말줄임됐다
+    expect(texts.find((t) => t.text === 긴이름)).toBeUndefined()
+    expect(layout.widthOverflowPx).toBe(0)
+    expect(texts.every((t) => t.maxWidth === undefined)).toBe(true)
+  })
 
-    expect(squeezed).toBeDefined()
-    expect(squeezed?.maxWidth).toBe(206)
+  /**
+   * 그래도 가로 압축 경로는 남겨 둔다 — 한 글자가 칸보다 넓으면 더 쪼갤 수
+   * 없어 배치가 맞출 수 없다. 겹쳐 그리는 것보다는 압축이 낫다.
+   */
+  test('한 글자가 예산보다 넓으면 그때만 가로 압축을 건다', () => {
+    const texts: Array<{ text: string; maxWidth?: number }> = []
+    const wide = approxMeasure(11)
+    const context = {
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textAlign: 'left',
+      fillRect: () => {},
+      beginPath: () => {},
+      roundRect: () => {},
+      fill: () => {},
+      stroke: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      measureText: (text: string) => ({ width: wide(text, context.font) }),
+      fillText: (text: string, _x: number, _y: number, maxWidth?: number) => {
+        texts.push({ text, maxWidth })
+      },
+    }
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => context,
+    } as unknown as HTMLCanvasElement
+
+    const layout = drawResultCard(canvas, contentFor('봄 라이트', '둥근형'))
+
+    expect(layout.widthOverflowPx).toBeGreaterThan(0)
+    expect(texts.some((t) => t.maxWidth !== undefined)).toBe(true)
   })
 
   test('배치를 그대로 돌려준다 — 계산해 놓고 버리지 않는다', () => {
@@ -441,22 +488,20 @@ describe('가로 넘침도 값으로 알린다', () => {
     }
   })
 
-  test('칸보다 넓은 스와치 이름이 들어오면 0이 아니다', () => {
-    const content = contentFor('봄 라이트', '둥근형')
-    const layout = layoutCard(
-      {
-        ...content,
-        palette: [
-          { ...content.palette[0], name: '아주아주아주아주아주긴색이름입니다' },
-          ...content.palette.slice(1),
-        ],
-      },
-      measure,
-    )
+  test('한 글자도 예산에 안 들어가면 0이 아니다', () => {
+    // 글자가 11배 넓으면 타입 이름 한 글자(92px)가 카드 폭 920px를 넘는다.
+    // 더 쪼갤 수 없어 배치가 맞출 수 없는 유일한 경우다.
+    const layout = layoutCard(contentFor('봄 라이트', '둥근형'), approxMeasure(11))
 
     expect(layout.widthOverflowPx).toBeGreaterThan(0)
-    // 세로는 멀쩡한데 가로만 넘친 경우 — 두 축이 따로 보고된다
-    expect(layout.overflowPx).toBe(0)
+    expect(layout.widthOverflowPx).toBe(widestOverflow(layout))
+  })
+
+  test('가로와 세로는 서로 다른 값을 잰다 — 한 값을 다른 쪽에 쓰지 않는다', () => {
+    const layout = layoutCard(contentFor('봄 라이트', '둥근형'), approxMeasure(11))
+
+    // 이 극단 입력에서는 둘 다 넘치지만 값이 같지 않다
+    expect(layout.widthOverflowPx).not.toBe(layout.overflowPx)
   })
 
   test('보고 값이 블록 실측과 일치한다', () => {
@@ -499,5 +544,180 @@ describe('wrapText — 줄나눔이 폭을 실제로 지킨다', () => {
   test('실제로 쓰는 폭에서는 그 한계에 닿지 않는다', () => {
     // 가장 큰 글꼴(타입 이름 92px)의 한 글자도 카드 폭 920px 안이다
     expect(measure('겨', `700 92px ${'sans-serif'}`)).toBeLessThan(920)
+  })
+})
+
+describe('wrapText — 로케일이 규칙을 가른다', () => {
+  const font = '32px sans-serif'
+  const english = 'Keep side volume restrained and let the hair fall along the jaw'
+
+  test('영문은 단어 중간에서 끊지 않는다', () => {
+    const lines = wrapText(english, 400, font, measure, 'en')
+
+    expect(lines.length).toBeGreaterThan(1)
+
+    for (const line of lines) {
+      for (const word of line.split(' ')) {
+        // 쪼개진 조각이 아니라 원문에 그대로 있는 단어여야 한다
+        expect(english.split(' ')).toContain(word)
+      }
+    }
+  })
+
+  test('한국어 규칙을 영문에 쓰면 단어가 잘린다 — 로케일로 가르는 이유', () => {
+    const korean = wrapText(english, 400, font, measure, 'ko')
+    const words = new Set(english.split(' '))
+    const broken = korean
+      .flatMap((line) => line.split(' '))
+      .filter((part) => part.length > 0 && !words.has(part))
+
+    expect(broken.length).toBeGreaterThan(0)
+  })
+
+  test('한국어 동작은 그대로다 — 로케일을 생략하면 기존 규칙', () => {
+    const text = '정수리 볼륨을 살린 레이어드 컷으로 세로 라인을 강조해 보세요'
+
+    expect(wrapText(text, 400, font, measure)).toEqual(
+      wrapText(text, 400, font, measure, 'ko'),
+    )
+  })
+
+  test('한 단어가 줄보다 길면 그 단어만 글자 단위로 내려간다', () => {
+    const lines = wrapText('Supercalifragilisticexpialidocious ok', 200, font, measure, 'en')
+
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines.at(-1)).toContain('ok')
+  })
+})
+
+describe('영문 실데이터 — 번역문이 카드를 넘치지 않는다', () => {
+  test('지원 언어가 둘이다', () => {
+    expect(SUPPORTED_LOCALES).toEqual(['ko', 'en'])
+  })
+
+  test.each(COMBOS)('en · %s · %s — 세로·가로 모두 예산 안', (tone, face) => {
+    const layout = layoutCard(contentFor(tone, face, 'en'), measure, 'en')
+
+    expect(layout.overflowPx).toBe(0)
+    expect(layout.widthOverflowPx).toBe(0)
+    expect(widestOverflow(layout)).toBe(0)
+  })
+
+  test.each(COMBOS)('en · %s · %s — 단어 중간 분절이 없다', (tone, face) => {
+    const content = contentFor(tone, face, 'en')
+    const layout = layoutCard(content, measure, 'en')
+    const source = new Set(
+      [content.toneOneLiner, ...content.cutTips, content.notice, content.header]
+        .join(' ')
+        .split(/[\s·]+/)
+        .filter((word) => word.length > 0),
+    )
+
+    for (const block of layout.blocks) {
+      if (block.role !== 'cutTip' && block.role !== 'oneLiner') {
+        continue
+      }
+
+      for (const word of block.text.split(/[\s·]+/).filter((w) => w.length > 0)) {
+        expect(source, `${block.role}: ${block.text}`).toContain(word)
+      }
+    }
+  })
+
+  /**
+   * ⚠ **대체 측정기 기준이다.** 실제 글꼴(2026-09-29 브라우저 실측)에서는 영문
+   * 고지가 한 줄에 들어간다 — 이 측정기가 라틴 글자를 실제보다 넓게 잡기
+   * 때문이다. 여기서 재는 것은 "영문이 두 줄이다"가 아니라 **"두 줄이 되면
+   * 예산이 따라 움직인다"**는 동작이고, 보수적인 쪽이라 게이트로는 안전하다.
+   */
+  test('고지가 두 줄이 되면 푸터 선이 그만큼 올라간다 (대체 측정기 기준)', () => {
+    const layout = layoutCard(contentFor('봄 라이트', '계란형', 'en'), measure, 'en')
+    const notices = layout.blocks.filter((block) => block.role === 'notice')
+
+    expect(notices.length).toBeGreaterThanOrEqual(2)
+    expect(layout.dividerY).toBeLessThan(1350 - 110)
+    expect(layout.bodyBottomY).toBeLessThanOrEqual(layout.dividerY)
+  })
+
+  /**
+   * ★한국어에는 최소 여유를 못 박아 둔 단언이 있는데(108px) **정작 빠듯한 쪽인
+   * 영문에는 없었다.** 넘침 단언만으로는 여유가 한 줄 밑으로 깎여도 통과한다 —
+   * 예정된 원어민 검토가 문장을 늘리는 방향이라 그 구간이 가장 위험하다.
+   *
+   * 이 값이 줄면 **본문 한 줄(44px)을 더할 여지가 없다**는 신호다.
+   */
+  test('가장 빠듯한 영문 조합의 세로 여유를 못 박는다', () => {
+    const slacks = COMBOS.map((combo) => {
+      const layout = layoutCard(contentFor(...combo, 'en'), measure, 'en')
+      return layout.dividerY - layout.bodyBottomY
+    })
+
+    const min = Math.min(...slacks)
+
+    expect(min).toBe(30)
+    // 이 측정기 기준으로는 본문 한 줄(44px)을 더할 여지가 없다.
+    // 실제 글꼴에서는 108px였다 — 이 측정기가 라틴 글자를 넓게 잡아
+    // **안전한 쪽으로 틀려 있다.** 그래도 여기서 줄어들면 실물도 함께 줄어든다.
+    expect(min).toBeLessThan(44)
+  })
+
+  test('영문에서도 축약 없이 담긴다 — 60조합 전부', () => {
+    const reduced = COMBOS.filter(
+      (combo) => layoutCard(contentFor(...combo, 'en'), measure, 'en').reductions.length > 0,
+    )
+
+    expect(reduced).toEqual([])
+  })
+})
+
+describe('스와치 이름이 칸을 넘으면 두 줄로 내린다', () => {
+  const content = contentFor('봄 라이트', '계란형')
+
+  test('한국어 이름은 한 줄에 들어간다 — 글꼴이 그대로다', () => {
+    const layout = layoutCard(content, measure)
+
+    for (const block of layout.blocks.filter((b) => b.role === 'swatchName')) {
+      expect(block.font).toContain('28px')
+    }
+  })
+
+  test('칸을 넘는 이름은 글꼴을 낮추고 두 줄까지 쓴다', () => {
+    const layout = layoutCard(
+      {
+        ...content,
+        palette: [
+          { ...content.palette[0], name: '아주 길고 긴 색 이름 하나' },
+          ...content.palette.slice(1),
+        ],
+      },
+      measure,
+    )
+
+    const lines = layout.blocks.filter(
+      (block) => block.role === 'swatchName' && block.font.includes('26px'),
+    )
+
+    expect(lines.length).toBe(2)
+    expect(lines.map((line) => line.text).join('')).toContain('아주')
+  })
+
+  test('두 줄이 되면 아래 내용이 그만큼 밀린다 — 겹치지 않는다', () => {
+    const wide = layoutCard(
+      {
+        ...content,
+        palette: [
+          { ...content.palette[0], name: '아주 길고 긴 색 이름 하나' },
+          ...content.palette.slice(1),
+        ],
+      },
+      measure,
+    )
+    const plain = layoutCard(content, measure)
+
+    const firstTitle = (layout: typeof plain) =>
+      layout.blocks.filter((block) => block.role === 'sectionTitle')[1]?.y ?? 0
+
+    expect(firstTitle(wide)).toBeGreaterThan(firstTitle(plain))
+    expect(wide.overflowPx).toBe(0)
   })
 })

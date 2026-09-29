@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { UI_TEXT } from '../../i18n/uiText'
 import { ResultCard } from './ResultCard'
+
+const t = UI_TEXT.ko
 import type { AnalysisSuccess } from '../../core/types'
 
 /**
@@ -61,7 +64,7 @@ function 근거펼치기(): void {
 
 describe('ResultCard 판정 근거', () => {
   test('보정이 걸린 사진은 적용 표시와 기준 밝기를 보여준다', () => {
-    render(<ResultCard result={result({ applied: true, referenceLuma: 225.3, clippedRatio: 0 })} />)
+    render(<ResultCard locale="ko" t={t} result={result({ applied: true, referenceLuma: 225.3, clippedRatio: 0 })} />)
     근거펼치기()
 
     expect(근거값('조명 보정')).toBe('적용됨')
@@ -71,7 +74,7 @@ describe('ResultCard 판정 근거', () => {
 
   test('보정을 건너뛴 사진은 그 사실을 보여준다 — 밝기 자리는 낱말로 채운다', () => {
     render(
-      <ResultCard result={result({ applied: false, referenceLuma: null, clippedRatio: 0 })} />,
+      <ResultCard locale="ko" t={t} result={result({ applied: false, referenceLuma: null, clippedRatio: 0 })} />,
     )
     근거펼치기()
 
@@ -83,7 +86,7 @@ describe('ResultCard 판정 근거', () => {
 
   test('잘린 사진은 보정이 적용됐어도 그 비율을 보여준다', () => {
     render(
-      <ResultCard result={result({ applied: true, referenceLuma: 137.3, clippedRatio: 0.42 })} />,
+      <ResultCard locale="ko" t={t} result={result({ applied: true, referenceLuma: 137.3, clippedRatio: 0.42 })} />,
     )
     근거펼치기()
 

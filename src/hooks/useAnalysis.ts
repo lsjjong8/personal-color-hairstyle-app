@@ -2,20 +2,18 @@ import { useCallback, useRef, useState } from 'react'
 import { analyzePhoto } from '../core/analyze'
 import type { AnalysisFailureReason, AnalysisSuccess } from '../core/types'
 
+/**
+ * 실패는 **사유 코드로** 내보낸다 — 문구로 바꾸지 않는다.
+ *
+ * 예전에는 이 훅이 한국어 문구를 들고 있었는데, 그러면 사용자가 언어를 바꿀 때
+ * **이미 떠 있는 실패 문구만 옆 언어로 남는다.** `types.ts`가 적어 둔 대로
+ * “사유 — UI가 사용자 문구로 번역한다”가 맞다.
+ */
 type AnalysisState =
   | { status: 'idle' }
   | { status: 'running' }
   | { status: 'done'; result: AnalysisSuccess }
-  | { status: 'failed'; message: string }
-
-/** 실패 사유를 사용자 언어로 옮긴다 — 코어는 사유 코드만 알고 문구는 UI가 정한다 */
-const FAILURE_MESSAGE: Record<AnalysisFailureReason, string> = {
-  'no-face-detected':
-    '얼굴을 찾지 못했습니다. 얼굴이 정면으로 크게 나온 사진으로 다시 시도해 주세요.',
-  'too-few-skin-pixels':
-    '피부색을 충분히 읽지 못했습니다. 조금 더 밝은 곳에서 다시 찍어 주세요.',
-  'model-load-failed': '분석 준비에 실패했습니다. 새로고침 후 다시 시도해 주세요.',
-}
+  | { status: 'failed'; reason: AnalysisFailureReason }
 
 export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>({ status: 'idle' })
@@ -48,7 +46,7 @@ export function useAnalysis() {
         return
       }
 
-      setState({ status: 'failed', message: FAILURE_MESSAGE[result.reason] })
+      setState({ status: 'failed', reason: result.reason })
     },
     [],
   )
